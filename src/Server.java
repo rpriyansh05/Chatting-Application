@@ -1,11 +1,7 @@
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.io.DataInput;
+import java.awt.event.*;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.ServerSocket;
@@ -13,18 +9,20 @@ import java.net.Socket;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 
-
 public class Server implements ActionListener {
-    JTextField text;
-    JPanel a1;
-    static Box vertical = Box.createVerticalBox();
-    static JFrame f = new JFrame();
-    static DataOutputStream dout;
 
-    Server() {
+    private JTextField text;
+    private JPanel a1;                 // Chat area
+    private JScrollPane scrollPane;    // For scrolling the chat
+    private static JFrame f = new JFrame();
 
+    // These are accessed from networking threads, so keep them static like original
+    private static DataOutputStream dout;
+
+    public Server() {
         f.setLayout(null);
 
+        // Header
         JPanel p1 = new JPanel();
         p1.setBackground(new Color(7, 94, 84));
         p1.setBounds(0, 0, 450, 70);
@@ -33,181 +31,216 @@ public class Server implements ActionListener {
 
         ImageIcon i1 = new ImageIcon(ClassLoader.getSystemResource("icons/3.png"));
         Image i2 = i1.getImage().getScaledInstance(25, 25, Image.SCALE_DEFAULT);
-        ImageIcon i3 = new ImageIcon(i2);
-        JLabel back = new JLabel(i3);
+        JLabel back = new JLabel(new ImageIcon(i2));
         back.setBounds(5, 20, 25, 25);
         p1.add(back);
-
+        back.setCursor(new Cursor(Cursor.HAND_CURSOR));
         back.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent ae) {
-                System.exit(0);
-            }
+            @Override public void mouseClicked(MouseEvent ae) { System.exit(0); }
         });
-
 
         ImageIcon i4 = new ImageIcon(ClassLoader.getSystemResource("icons/2.jpg"));
         Image i5 = i4.getImage().getScaledInstance(50, 50, Image.SCALE_DEFAULT);
-        ImageIcon i6 = new ImageIcon(i5);
-        JLabel profile = new JLabel(i6);
+        JLabel profile = new JLabel(new ImageIcon(i5));
         profile.setBounds(40, 10, 50, 50);
         p1.add(profile);
 
-
         ImageIcon i7 = new ImageIcon(ClassLoader.getSystemResource("icons/video.png"));
         Image i8 = i7.getImage().getScaledInstance(30, 30, Image.SCALE_DEFAULT);
-        ImageIcon i9 = new ImageIcon(i8);
-        JLabel video = new JLabel(i9);
+        JLabel video = new JLabel(new ImageIcon(i8));
         video.setBounds(300, 20, 30, 30);
         p1.add(video);
 
-
         ImageIcon i10 = new ImageIcon(ClassLoader.getSystemResource("icons/phone.png"));
         Image i11 = i10.getImage().getScaledInstance(35, 30, Image.SCALE_DEFAULT);
-        ImageIcon i12 = new ImageIcon(i11);
-        JLabel phone = new JLabel(i12);
+        JLabel phone = new JLabel(new ImageIcon(i11));
         phone.setBounds(360, 20, 35, 30);
         p1.add(phone);
 
-
         ImageIcon i13 = new ImageIcon(ClassLoader.getSystemResource("icons/3icon.png"));
         Image i14 = i13.getImage().getScaledInstance(10, 25, Image.SCALE_DEFAULT);
-        ImageIcon i15 = new ImageIcon(i14);
-        JLabel morevert = new JLabel(i15);
+        JLabel morevert = new JLabel(new ImageIcon(i14));
         morevert.setBounds(420, 20, 10, 25);
         p1.add(morevert);
 
-
-        JLabel name = new JLabel("pri");
-        name.setBounds(110, 15, 100, 18);
+        JLabel name = new JLabel("Pri");
+        name.setBounds(110, 15, 200, 18);
         name.setForeground(Color.WHITE);
         name.setFont(new Font("SAN_SERIF", Font.BOLD, 18));
         p1.add(name);
 
-
         JLabel status = new JLabel("Active Now");
-        status.setBounds(110, 35, 100, 18);
+        status.setBounds(110, 35, 200, 18);
         status.setForeground(Color.WHITE);
-        status.setFont(new Font("SAN_SERIF", Font.BOLD, 18));
+        status.setFont(new Font("SAN_SERIF", Font.PLAIN, 14));
         p1.add(status);
 
+        // Chat area (scrollable)
         a1 = new JPanel();
-        a1.setBounds(5, 75, 440, 570);
-        f.add(a1);
+        a1.setLayout(new BoxLayout(a1, BoxLayout.Y_AXIS));
+        a1.setBackground(Color.WHITE);
 
+        scrollPane = new JScrollPane(a1);
+        scrollPane.setBounds(5, 75, 440, 570);
+        scrollPane.setBorder(null);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        f.add(scrollPane);
 
+        // Input
         text = new JTextField();
         text.setBounds(5, 655, 310, 40);
         text.setFont(new Font("SAN_SERIF", Font.PLAIN, 16));
-        text.setFont(new Font("SAN_SERIF", Font.BOLD, 18));
         f.add(text);
-
+        text.addActionListener(this); // Press Enter to send
 
         JButton send = new JButton("Send");
         send.setBounds(320, 655, 123, 40);
         send.setBackground(new Color(7, 94, 84));
         send.setForeground(Color.WHITE);
-        send.addActionListener(this);
         send.setFont(new Font("SAN_SERIF", Font.PLAIN, 16));
+        send.addActionListener(this);
         f.add(send);
-
 
         f.setSize(450, 700);
         f.setLocation(200, 50);
         f.setUndecorated(true);
         f.getContentPane().setBackground(Color.WHITE);
-
-
         f.setVisible(true);
 
+        // Optional: allow dragging the undecorated frame by header
+        final Point[] mouseDownCompCoords = {null};
+        p1.addMouseListener(new MouseAdapter() {
+            public void mousePressed(MouseEvent e) { mouseDownCompCoords[0] = e.getPoint(); }
+            public void mouseReleased(MouseEvent e) { mouseDownCompCoords[0] = null; }
+        });
+        p1.addMouseMotionListener(new MouseMotionAdapter() {
+            public void mouseDragged(MouseEvent e) {
+                Point currCoords = e.getLocationOnScreen();
+                f.setLocation(currCoords.x - mouseDownCompCoords[0].x,
+                        currCoords.y - mouseDownCompCoords[0].y);
+            }
+        });
     }
 
     @Override
     public void actionPerformed(ActionEvent ae) {
-        try{
-        String out = text.getText();
+        try {
+            String out = text.getText().trim();
+            if (out.isEmpty()) return;
 
-        JPanel p2 = formatLabel(out);
+            JPanel p2 = formatLabel(out);
 
+            JPanel right = new JPanel(new BorderLayout());
+            right.setOpaque(false);
+            right.add(p2, BorderLayout.LINE_END);
 
-        a1.setLayout(new BorderLayout());
+            a1.add(right);
+            a1.add(Box.createVerticalStrut(15));
+            a1.revalidate();
+            autoScrollToBottom();
 
-        JPanel right = new JPanel(new BorderLayout());
-        right.add(p2, BorderLayout.LINE_END);
-        vertical.add(right);
-        vertical.add(Box.createVerticalStrut(15));
-        a1.add(vertical, BorderLayout.PAGE_START);
+            // Send over network if connected
+            if (dout != null) {
+                dout.writeUTF(out);
+            }
 
-        dout.writeUTF(out);
-
-        text.setText("");
-
-        f.repaint();
-        f.invalidate();
-        f.validate();
-
-    } catch (Exception e){
+            text.setText("");
+        } catch (Exception e) {
             e.printStackTrace();
         }
+    }
 
+    private void autoScrollToBottom() {
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar bar = scrollPane.getVerticalScrollBar();
+            bar.setValue(bar.getMaximum());
+        });
     }
 
     public static JPanel formatLabel(String out) {
-
         JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel,BoxLayout.Y_AXIS));
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setOpaque(false);
 
-
-        JLabel output = new JLabel("<html><p style=\"width: 150px\">" + out + "</p></html>");
-        output.setFont(new Font("Tahoma",Font.PLAIN,16));
-        output.setBackground(new Color(37,211,102));
+        JLabel output = new JLabel("<html><p style=\"width: 150px;\">" + escapeHtml(out) + "</p></html>");
+        output.setFont(new Font("Tahoma", Font.PLAIN, 16));
+        output.setBackground(new Color(37, 211, 102));
         output.setOpaque(true);
-        output.setBorder(new EmptyBorder(15,15,15,50));
-
+        output.setBorder(new EmptyBorder(15, 15, 15, 50));
 
         panel.add(output);
 
         Calendar cal = Calendar.getInstance();
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
 
-
-        JLabel time = new JLabel();
-        time.setText(sdf.format(cal.getTime()));
-
+        JLabel time = new JLabel(sdf.format(cal.getTime()));
+        time.setFont(new Font("Tahoma", Font.PLAIN, 12));
+        time.setBorder(new EmptyBorder(5, 5, 0, 0));
         panel.add(time);
 
         return panel;
     }
 
+    // Minimal HTML escape for safety in JLabel's HTML
+    private static String escapeHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace("\"", "&quot;");
+    }
 
-        public static void main (String[]args){
-            new Server();
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(Server::new);
 
-            try{
-                ServerSocket skt = new ServerSocket(6001);
-                while(true) {
-                    Socket s = skt.accept();
+        // Start the server socket on a background thread
+        new Thread(() -> {
+            try (ServerSocket serverSocket = new ServerSocket(6001)) {
+                while (true) {
+                    Socket s = serverSocket.accept();
+
                     DataInputStream din = new DataInputStream(s.getInputStream());
                     dout = new DataOutputStream(s.getOutputStream());
 
-                    while(true){
-                        String msg = din.readUTF();
-                        JPanel panel = formatLabel(msg);
+                    // Reader thread per connection
+                    new Thread(() -> {
+                        try (Socket sock = s; DataInputStream in = din) {
+                            while (true) {
+                                String msg = in.readUTF();
 
-                        JPanel left = new JPanel(new BorderLayout());
-                        left.add(panel,BorderLayout.LINE_START);
-                        vertical.add(left);
-                        f.validate();
+                                JPanel panel = formatLabel(msg);
+                                JPanel left = new JPanel(new BorderLayout());
+                                left.setOpaque(false);
+                                left.add(panel, BorderLayout.LINE_START);
 
-                    }
+                                SwingUtilities.invokeLater(() -> {
+                                    // Find the Server instance's chat panel:
+                                    // Since we created on EDT, locate existing frame components safely
+                                    for (Component c : f.getContentPane().getComponents()) {
+                                        if (c instanceof JScrollPane) {
+                                            JScrollPane sp = (JScrollPane) c;
+                                            JViewport vp = sp.getViewport();
+                                            Component view = vp.getView();
+                                            if (view instanceof JPanel) {
+                                                JPanel chat = (JPanel) view;
+                                                chat.add(left);
+                                                chat.add(Box.createVerticalStrut(15));
+                                                chat.revalidate();
+                                                sp.getVerticalScrollBar().setValue(
+                                                        sp.getVerticalScrollBar().getMaximum()
+                                                );
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (Exception e) {
+                            // Connection closed or error – just log
+                            e.printStackTrace();
+                        }
+                    }, "Client-Reader").start();
                 }
-
-            } catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
             }
-
-
-
-
+        }, "Server-Acceptor").start();
     }
 }
+
